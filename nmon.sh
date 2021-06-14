@@ -12,7 +12,7 @@ CONFIG=""                # config directory for node, eg. $HOME/.gaia/config
 LOGNAME=""               # a custom log file name can be chosen, if left empty default is nodecheck-<username>.log
 LOGPATH="$(pwd)"         # the directory where the log file is stored, for customization insert path like: /my/path
 LOGSIZE=200              # the max number of lines after that the log will be trimmed to reduce its size
-LOGROTATION="2"          # options for log rotation: (1) rotate to $LOGNAME.1 every $LOGSIZE lines;  (2) append to $LOGNAME.1 every $LOGSIZE lines; (3) truncate $logFile to $LOGSIZE every iteration
+LOGROTATION="1"          # options for log rotation: (1) rotate to $LOGNAME.1 every $LOGSIZE lines;  (2) append to $LOGNAME.1 every $LOGSIZE lines; (3) truncate $logFile to $LOGSIZE every iteration
 SLEEP1="30s"             # polls every SLEEP1 sec
 PRECOMMITS="20"          # check last n precommits, can be 0 for no checking
 VALIDATORADDRESS=""      # if left empty default is from status call (validator)
@@ -23,7 +23,7 @@ VALIDATORMETRICS="on"    # advanced validator metrics, api must be enabled in ap
 GOVERNANCE="on"          # vote checks, 'VALIDATORMETRICS' must be 'on'
 VOTEURGENCY="3.0"        # threshold in days for time left for new proposals to become urgent votes
 VERSIONCHECK="on"        # checks the git repository for newer versions, 'VALIDATORMETRICS' must be 'on'
-VERSIONING="revision"    # 'major.minor.patch-revision', 'patch' recommended for production, 'revision' for beta or rc (testnet)
+VERSIONING="patch"    # 'major.minor.patch-revision', 'patch' recommended for production, 'revision' for beta or rc (testnet)
 REMOTEREPOSITORY=""      # remote repository is auto-discovered, however if eg. only the binary is deployed or it is not located under 'SHOME' it fails
 DELEGATORADDRESS=""      # the self-delegation address is auto-discovered, however it can fail in case no self-delegation exists
 ###  internal:           #
@@ -270,7 +270,7 @@ while true; do
                 totValidators=$(jq -r '.params.max_validators' <<<$validatorParams)
                 bondDenomination=$(jq -r '.params.bond_denom' <<<$validatorParams)
                 pctRank=$(echo "scale=2 ; $rank / $totValidators" | bc)
-                pctActiveCalidators=$(echo "scale=2 ; $activeValidators / $totValidators" | bc)
+                pctActiveValidators=$(echo "scale=2 ; $activeValidators / $totValidators" | bc)
                 validatorCommission=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/distribution/v1beta1/validators/${valoper}/commission)
                 validatorCommission=$(jq -r '.commission.commission[] | select(.denom == '\"$bondDenomination\"') | .amount' <<<$validatorCommission)
                 validatorCommission=$(echo "scale=2 ; $validatorCommission / 1000000.0" | bc)
@@ -278,10 +278,10 @@ while true; do
                 delegatorReward=$(jq -r '.rewards[] | select(.validator_address == '\"$valoper\"') | .reward[] |  select(.denom == '\"$bondDenomination\"') | .amount' <<<$delegatorRewards)
                 delegatorReward=$(echo "scale=2 ; $delegatorReward / 1000000.0" | bc)
 
-                validatorMetrics=" isJailed=$isJailed stake=$votingPower rank=$rank pctRank=$pctRank activeValidators=$activeValidators pctActiveCalidators=$pctActiveCalidators validatorCommission=$validatorCommission delegatorReward=${delegatorReward}"
+                validatorMetrics=" isJailed=$isJailed stake=$votingPower rank=$rank pctRank=$pctRank activeValidators=$activeValidators pctActiveValidators=$pctActiveValidators validatorCommission=$validatorCommission delegatorReward=${delegatorReward}"
                 if [ "$GOVERNANCE" == "on" ]; then
                     proposals=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/gov/v1beta1/proposals?pagination.limit=10000)
-                    votingPeriodIds=$(jq -r '.proposals[] | select(.status == "PROPOSAL_STATUS_PA") | .proposal_id' <<<$proposals)
+                    votingPeriodIds=$(jq -r '.proposals[] | select(.status == "PROPOSAL_STATUS_VOTING_PERIOD") | .proposal_id' <<<$proposals)
                     newProposalsCount=0
                     urgentVotes=0
                     gov=""
@@ -290,9 +290,9 @@ while true; do
                         proposal=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/gov/v1beta1/proposals/${id})
                         vote=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/gov/v1beta1/proposals/${id}/votes/${DELEGATORADDRESS})
                         votingEndTime=$(jq -r ".proposal.voting_end_time" <<<$proposal)
-                        echo $proposal
-                        echo $vote
-                        echo $votingEndTime
+                        #echo $proposal
+                        #echo $vote
+                        #echo $votingEndTime
                         if [ $(jq -r ".code" <<<$vote) == "3" ]; then
                             ((newProposalsCount = $newProposalsCount + 1))
                             voteDaysLeft=$(echo "scale=2 ; ($(date -d $votingEndTime +%s) - $(date -d now +%s)) / 86400" | bc)
@@ -349,7 +349,6 @@ while true; do
             if [ -f ${logFile}.1 ]; then rm ${logFile}.1; fi # no log rotation with option (3)
             ;;
         *) ;;
-
         esac
     fi
 
@@ -387,4 +386,3 @@ while true; do
 
     sleep $SLEEP1
 done
-
