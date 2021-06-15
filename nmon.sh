@@ -23,7 +23,7 @@ VALIDATORMETRICS="on"    # advanced validator metrics, api must be enabled in ap
 GOVERNANCE="on"          # vote checks, 'VALIDATORMETRICS' must be 'on'
 VOTEURGENCY="3.0"        # threshold in days for time left for new proposals to become urgent votes
 VERSIONCHECK="on"        # checks the git repository for newer versions, 'VALIDATORMETRICS' must be 'on'
-VERSIONING="patch"    # 'major.minor.patch-revision', 'patch' recommended for production, 'revision' for beta or rc (testnet)
+VERSIONING="patch"       # 'major.minor.patch-revision', 'patch' recommended for production, 'revision' for beta or rc (testnet)
 REMOTEREPOSITORY=""      # remote repository is auto-discovered, however if eg. only the binary is deployed or it is not located under 'SHOME' it fails
 DELEGATORADDRESS=""      # the self-delegation address is auto-discovered, however it can fail in case no self-delegation exists
 ###  internal:           #
@@ -184,7 +184,7 @@ if [ "$CHECKPERSISTENTPEERS" -eq 1 ]; then
 fi
 
 echo ""
-if [ $PRECOMMITS -eq 0 ]; then echo "precommit checks: off"; else echo "precommit checks: on"; fi
+if [ $PRECOMMITS -eq 0 ]; then echo "precommit checks: off"; else echo "precommit checks: last $PRECOMMITS"; fi
 if [ $CHECKPERSISTENTPEERS -eq 0 ]; then echo "persistent peer checks: off"; else echo "persistent peer checks: on"; fi
 if [[ "$VALIDATORMETRICS" == "on" ]]; then echo "validator metrics: on"; else echo "validator metrics: off"; fi
 if [[ "$GOVERNANCE" == "on" ]] && [[ "$VALIDATORMETRICS" == "on" ]]; then echo "governance check: vote urgency ${VOTEURGENCY} days"; else echo "governance check: off"; fi
