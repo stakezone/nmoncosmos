@@ -264,12 +264,12 @@ while true; do
                 votingPower=$(jq -r '.validator | select(.operator_address == '\"$valoper\"') | .tokens' <<<$validator)
                 votingPower=$(echo "scale=2 ; $votingPower / 1000000.0" | bc)
                 activeValidators=$(jq -r 'length' <<<$validators)
-                rank=$(jq -r 'map(.address == '\"$VALIDATORADDRESS\"') | index(true)' <<<$validators)
-                ((rank += 1))
+                rank_=$(jq -r 'map(.address == '\"$VALIDATORADDRESS\"') | index(true)' <<<$validators)
+                if [[ "$rank_" != "null" ]]; then ((rank_ += 1)); rank="$rank_"; fi
                 validatorParams=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/staking/v1beta1/params)
                 totValidators=$(jq -r '.params.max_validators' <<<$validatorParams)
                 bondDenomination=$(jq -r '.params.bond_denom' <<<$validatorParams)
-                pctRank=$(echo "scale=2 ; $rank / $totValidators" | bc)
+                if [ -n "$rank" ]; then pctRank=$(echo "scale=2 ; $rank / $totValidators" | bc); fi
                 pctActiveValidators=$(echo "scale=2 ; $activeValidators / $totValidators" | bc)
                 validatorCommission=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/distribution/v1beta1/validators/${valoper}/commission)
                 validatorCommission=$(jq -r '.commission.commission[] | select(.denom == '\"$bondDenomination\"') | .amount' <<<$validatorCommission)
