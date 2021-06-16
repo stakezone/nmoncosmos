@@ -7,31 +7,31 @@
 ###    if suppressing error messages is preferred, run as './nmon.sh 2> /dev/null'
 
 ###    CONFIG    ##################################################################################################
-CONFIG=""                # config directory for node, eg. $HOME/.gaia/config
-### optional:            #
-LOGNAME=""               # a custom log file name can be chosen, if left empty default is nodecheck-<username>.log
-LOGPATH="$(pwd)"         # the directory where the log file is stored, for customization insert path like: /my/path
-LOGSIZE=200              # the max number of lines after that the log will be trimmed to reduce its size
-LOGROTATION="1"          # options for log rotation: (1) rotate to $LOGNAME.1 every $LOGSIZE lines;  (2) append to $LOGNAME.1 every $LOGSIZE lines; (3) truncate $logFile to $LOGSIZE every iteration
-SLEEP1="30s"             # polls every SLEEP1 sec
-PRECOMMITS="20"          # check last n precommits, can be 0 for no checking
-VALIDATORADDRESS=""      # if left empty default is from status call (validator)
-CHECKPERSISTENTPEERS="1" # if 1 the number of disconnected persistent peers is checked (when persistent peers are configured in config.toml)
-TIMEFORMAT="-u --rfc-3339=seconds" # date format for log line entries
-### API access required: #
-VALIDATORMETRICS="on"    # advanced validator metrics, api must be enabled in app.toml
-GOVERNANCE="on"          # vote checks, 'VALIDATORMETRICS' must be 'on'
-VOTEURGENCY="3.0"        # threshold in days for time left for new proposals to become urgent votes
-VERSIONCHECK="on"        # checks the git repository for newer versions, 'VALIDATORMETRICS' must be 'on'
-VERSIONING="patch"       # 'major.minor.patch-revision', 'patch' recommended for production, 'revision' for beta or rc (testnet)
-REMOTEREPOSITORY=""      # remote repository is auto-discovered, however if eg. only the binary is deployed or it is not located under 'SHOME' it fails
-DELEGATORADDRESS=""      # the self-delegation address is auto-discovered, however it can fail in case no self-delegation exists
-###  internal:           #
-colorI='\033[0;32m'      # black 30, red 31, green 32, yellow 33, blue 34, magenta 35, cyan 36, white 37
-colorD='\033[0;90m'      # for light color 9 instead of 3
-colorE='\033[0;31m'      #
-colorW='\033[0;33m'      #
-noColor='\033[0m'        # no color
+CONFIG=""                 # config directory for node, eg. $HOME/.gaia/config
+### optional:             #
+LOGNAME=""                # a custom log file name can be chosen, if left empty default is nmon-<username>.log
+LOGPATH="$(pwd)"          # the directory where the log file is stored, for customization insert path like: /my/path
+LOGSIZE=200               # the max number of lines after that the log will be trimmed to reduce its size
+LOGROTATION="1"           # options for log rotation: (1) rotate to $LOGNAME.1 every $LOGSIZE lines;  (2) append to $LOGNAME.1 every $LOGSIZE lines; (3) truncate $logFile to $LOGSIZE every iteration
+SLEEP1="30s"              # polls every SLEEP1 sec
+VALIDATORADDRESS=""       # if left empty default is from status call (validator)
+CHECKPERSISTENTPEERS="on" # if 'on' the number of disconnected persistent peers is checked (when persistent peers are configured in config.toml)
+VERSIONCHECK="on"         # checks the git repository for newer versions, 'VALIDATORMETRICS' must be 'on'
+VERSIONING="patch"        # 'major.minor.patch-revision', 'patch' recommended for production, 'revision' for beta or rc (testnet)
+REMOTEREPOSITORY=""       # remote repository is auto-discovered, however if eg. only the binary is deployed or it is not located under 'SHOME' it fails
+### api access required:  #
+VALIDATORMETRICS="on"     # advanced validator metrics, api must be enabled in app.toml
+PRECOMMITS="20"           # check last n precommits, can be 0 for no checking
+GOVERNANCE="on"           # vote checks, 'VALIDATORMETRICS' must be 'on'
+VOTEURGENCY="3.0"         # threshold in days for time left for new proposals to become urgent votes
+DELEGATORADDRESS=""       # the self-delegation address is auto-discovered, however it can fail in case no self-delegation exists
+###  internal:            #
+timeformat="-u --rfc-3339=seconds" # date format for log line entries
+colorI='\033[0;32m'       # black 30, red 31, green 32, yellow 33, blue 34, magenta 35, cyan 36, white 37
+colorD='\033[0;90m'       # for light color 9 instead of 3
+colorE='\033[0;31m'       #
+colorW='\033[0;33m'       #
+noColor='\033[0m'         # no color
 ###  END CONFIG  ##################################################################################################
 
 if [ -z $CONFIG ]; then
@@ -47,7 +47,7 @@ if [ -z $url ]; then
 fi
 url="http://${url}"
 
-if [ -z $LOGNAME ]; then LOGNAME="nodemonitor-${USER}.log"; fi
+if [ -z $LOGNAME ]; then LOGNAME="nmon-${USER}.log"; fi
 logFile="${LOGPATH}/${LOGNAME}"
 touch $logFile
 
@@ -66,7 +66,7 @@ if [ -z $VALIDATORADDRESS ]; then
 fi
 
 if [ "$flag1" == "1" ]; then
-    validators=$(curl -s "$url"/validators)
+    validators=$(curl -s "$url"/validators?per_page=10000)
     validatorPubkey=$(jq -r '.result.validators[] | select(.address=='\"$VALIDATORADDRESS\"') | .pub_key.value' <<<$validators)
 else
     validatorPubkey=$(jq -r '.result.validator_info.pub_key.value' <<<$status)
@@ -161,7 +161,7 @@ if [ ! -z $DELEGATORADDRESS ]; then echo "delegator address: ${DELEGATORADDRESS}
 #echo "net moniker: $(sed -e 's/^"//' -e 's/"$//' <<<$netMoniker)"
 
 echo ""
-if [ "$CHECKPERSISTENTPEERS" -eq 1 ]; then
+if [ "$CHECKPERSISTENTPEERS" == "on" ]; then
     persistentPeers=$(sed '/^\[p2p\]/,/^\[/!d;//d' $CONFIG/config.toml | grep "^persistent_peers\b" | awk -v FS='("|")' '{print $2}')
     persistentPeerIds=$(sed 's/,//g' <<<$(sed 's/@[^ ^,]\+/ /g' <<<$persistentPeers))
     totPersistentPeerIds=$(wc -w <<<$persistentPeerIds)
@@ -179,35 +179,38 @@ if [ "$CHECKPERSISTENTPEERS" -eq 1 ]; then
         fi
     done
     persistentPeersOff=$(($totPersistentPeerIds - $persistentPeersMatchCount))
-    echo "$totPersistentPeerIds persistent peer(s): $persistentPeerIds"
-    echo "$persistentPeersMatchCount persistent peer(s) off: $persistentPeersMatch"
+    echo "$totPersistentPeerIds persistent peers: $persistentPeerIds"
+    echo "$persistentPeersMatchCount persistent peers off: $persistentPeersMatch"
 fi
 
 echo ""
-if [ $PRECOMMITS -eq 0 ]; then echo "precommit checks: off"; else echo "precommit checks: last $PRECOMMITS"; fi
-if [ $CHECKPERSISTENTPEERS -eq 0 ]; then echo "persistent peer checks: off"; else echo "persistent peer checks: on"; fi
+if [ $CHECKPERSISTENTPEERS == "on" ]; then echo "persistent peers check: on"; else echo "persistent peers check: off"; fi
+if [[ "$enableAPI" == "true" ]]; then echo "git version check: $VERSIONING"; else echo "git version check: off"; fi
 if [[ "$VALIDATORMETRICS" == "on" ]]; then echo "validator metrics: on"; else echo "validator metrics: off"; fi
+if [[ "$PRECOMMITS" > 0 ]] && [[ "$VALIDATORMETRICS" == "on" ]]; then echo "precommit check: last $PRECOMMITS"; else echo "precommit check: off"; fi
 if [[ "$GOVERNANCE" == "on" ]] && [[ "$VALIDATORMETRICS" == "on" ]]; then echo "governance check: vote urgency ${VOTEURGENCY} days"; else echo "governance check: off"; fi
-if [[ "$VERSIONCHECK" == "on" ]] && [[ "$VALIDATORMETRICS" == "on" ]]; then echo "git version check: $VERSIONING"; else echo "git version check: off"; fi
 echo ""
 
 status=$(curl -s "$url"/status)
 height=$(jq -r '.result.sync_info.latest_block_height' <<<$status)
-blockInfo=$(curl -s "$url"/block?height="$height")
-if [ $height -gt $PRECOMMITS ]; then
-    if [ "$(grep -c 'precommits' <<<$blockInfo)" != "0" ]; then versionIdentifier="precommits"; elif [ "$(grep -c 'signatures' <<<$blockInfo)" != "0" ]; then versionIdentifier="signatures"; else
-        echo "json parameters of this version not recognised"
-        exit 1
-    fi
-else
-    echo "wait for $PRECOMMITS blocks and start again..."
+blockInfo=$(curl -s "$url"/block?height="$height&per_page=10000")
+
+if [ "$(grep -c 'precommits' <<<$blockInfo)" != "0" ]; then versionIdentifier="precommits"; elif [ "$(grep -c 'signatures' <<<$blockInfo)" != "0" ]; then versionIdentifier="signatures"; else
+    echo "json parameters of this version not recognised"
     exit 1
+fi
+if [ $height -gt $PRECOMMITS ]; then
+    PRECOMMITS_=$PRECOMMITS
+else
+    #echo "wait for $PRECOMMITS blocks and start again..."
+    #exit 1
+    PRECOMMITS_="$height"
 fi
 
 logLines=$(wc -l <$logFile)
 if [ $logLines -gt $LOGSIZE ]; then sed -i "1,$(($logLines - $LOGSIZE))d" $logFile; fi # the log file is trimmed for logsize
 
-date=$(date $TIMEFORMAT)
+date=$(date $timeformat)
 echo "$date status=scriptstarted chainID=$chainID" >>$logFile
 
 while true; do
@@ -219,58 +222,62 @@ while true; do
         height=$(jq -r '.result.sync_info.latest_block_height' <<<$status)
         blockTime=$(jq -r '.result.sync_info.latest_block_time' <<<$status)
         catchingUp=$(jq -r '.result.sync_info.catching_up' <<<$status)
-        votingPower=$(jq -r '.result.validator_info.voting_power' <<<$status)
+        #votingPower=$(jq -r '.result.validator_info.voting_power' <<<$status)
         if [ $catchingUp == "false" ]; then catchingUp="synced"; elif [ $catchingUp == "true" ]; then catchingUp="catchingup"; fi
-        if [ "$CHECKPERSISTENTPEERS" -eq 1 ]; then
+        if [ "$CHECKPERSISTENTPEERS" == "on" ]; then
             persistentPeersMatch=0
             netInfo=$(curl -s "$url"/net_info)
             for id in $persistentPeerIds; do
                 persistentPeersMatch=$(($persistentPeersMatch + $(grep -c "$id" <<<$netInfo)))
             done
             persistentPeersOff=$(($totPersistentPeerIds - $persistentPeersMatch))
+            persistentPeersInfo=" persistentPeersOff=$persistentPeersOff"
         else
-            persistentPeersOff=0
+            persistentPeersInfo=""
         fi
-        consdump=$(curl -s "$url"/dump_consensus_state)
-        validators=$(jq -r '.result.round_state.validators.validators' <<<$consdump)
-        #activeValidators=$(jq -r '.result.round_state.validators.validators | length' <<<$consdump)
-        isValidator=$(grep -c "$VALIDATORADDRESS" <<<$validators)
-        pctTotCommits=$(jq -r '.result.round_state.last_commit.votes_bit_array' <<<$consdump)
+        consDump=$(curl -s "$url"/dump_consensus_state)
+        validators=$(jq -r '.result.round_state.validators.validators' <<<$consDump)
+        #activeValidators=$(jq -r '.result.round_state.validators.validators | length' <<<$consDump)
+        pctTotCommits=$(jq -r '.result.round_state.last_commit.votes_bit_array' <<<$consDump)
         pctTotCommits=$(grep -Po "=\s+\K[^ ^]+" <<<$pctTotCommits)
-        if [ "$isValidator" != "0" ]; then
-            isValidator="true"
-            validators=$(jq -r '. | sort_by((.voting_power)|tonumber) | reverse' <<<$validators)
-            precommitCount=0
-            for ((i = $(($height - $PRECOMMITS + 1)); i <= $height; i++)); do
-                validatorAddresses=$(curl -s "$url"/block?height="$i")
-                validatorAddresses=$(jq ".result.block.last_commit.${versionIdentifier}[].validator_address" <<<$validatorAddresses)
-                validatorPrecommit=$(grep -c "$VALIDATORADDRESS" <<<$validatorAddresses)
-                precommitCount=$(($precommitCount + $validatorPrecommit))
-            done
-            if [ $PRECOMMITS -eq 0 ]; then pctPrecommits="1.0"; else pctPrecommits=$(echo "scale=2 ; $precommitCount / $PRECOMMITS" | bc); fi
-
-            validatorInfo="isValidator=$isValidator pctPrecommits=$pctPrecommits pctTotCommits=${pctTotCommits}"
-        else
-            isValidator="false"
-            validatorInfo="isValidator=$isValidator"
-        fi
+        pctTotCommits=$(echo "scale=2 ; 100 * $pctTotCommits" | bc)
         if [ "$VALIDATORMETRICS" == "on" ]; then
+            isValidator=$(grep -c "$VALIDATORADDRESS" <<<$validators)
+            if [ "$isValidator" != "0" ]; then
+                isValidator="true"
+                validators=$(jq -r '. | sort_by((.voting_power)|tonumber) | reverse' <<<$validators)
+                precommitCount=0
+                for ((i = $(($height - $PRECOMMITS_ + 1)); i <= $height; i++)); do
+                    validatorAddresses=$(
+                        curl -s "$url"/block?height="$i" &
+                        per_page=10000
+                    )
+                    validatorAddresses=$(jq ".result.block.last_commit.${versionIdentifier}[].validator_address" <<<$validatorAddresses)
+                    validatorPrecommit=$(grep -c "$VALIDATORADDRESS" <<<$validatorAddresses)
+                    precommitCount=$(($precommitCount + $validatorPrecommit))
+                done
+                pctPrecommits=$(echo "scale=2 ; 100 * $precommitCount / $PRECOMMITS_" | bc)
+
+                validatorInfo=" isValidator=$isValidator pctPrecommits=$pctPrecommits"
+            else
+                isValidator="false"
+                validatorInfo=" isValidator=$isValidator"
+            fi
             validator=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/staking/v1beta1/validators/${valoper})
             isJailed=$(jq -r '.validator.jailed' <<<$validator)
             if [[ "$isJailed" != "false" ]] && [[ "$isJailed" != "true" ]]; then
                 validatorMetrics=""
             else
-                #votingPower=$(jq -r '.result.validator_info.voting_power' <<<$status)
-                votingPower=$(jq -r '.validator | select(.operator_address == '\"$valoper\"') | .tokens' <<<$validator)
-                votingPower=$(echo "scale=2 ; $votingPower / 1000000.0" | bc)
+                stake=$(jq -r '.validator | select(.operator_address == '\"$valoper\"') | .tokens' <<<$validator)
+                stake=$(echo "scale=2 ; $stake / 1000000.0" | bc)
                 activeValidators=$(jq -r 'length' <<<$validators)
                 rank=$(jq -r 'map(.address == '\"$VALIDATORADDRESS\"') | index(true)' <<<$validators)
                 ((rank += 1))
                 validatorParams=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/staking/v1beta1/params)
                 totValidators=$(jq -r '.params.max_validators' <<<$validatorParams)
                 bondDenomination=$(jq -r '.params.bond_denom' <<<$validatorParams)
-                pctRank=$(echo "scale=2 ; $rank / $totValidators" | bc)
-                pctActiveValidators=$(echo "scale=2 ; $activeValidators / $totValidators" | bc)
+                pctRank=$(echo "scale=2 ; 100 * $rank / $totValidators" | bc)
+                pctActiveValidators=$(echo "scale=2 ; 100 * $activeValidators / $totValidators" | bc)
                 validatorCommission=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/distribution/v1beta1/validators/${valoper}/commission)
                 validatorCommission=$(jq -r '.commission.commission[] | select(.denom == '\"$bondDenomination\"') | .amount' <<<$validatorCommission)
                 validatorCommission=$(echo "scale=2 ; $validatorCommission / 1000000.0" | bc)
@@ -278,7 +285,7 @@ while true; do
                 delegatorReward=$(jq -r '.rewards[] | select(.validator_address == '\"$valoper\"') | .reward[] |  select(.denom == '\"$bondDenomination\"') | .amount' <<<$delegatorRewards)
                 delegatorReward=$(echo "scale=2 ; $delegatorReward / 1000000.0" | bc)
 
-                validatorMetrics=" isJailed=$isJailed stake=$votingPower rank=$rank pctRank=$pctRank activeValidators=$activeValidators pctActiveValidators=$pctActiveValidators validatorCommission=$validatorCommission delegatorReward=${delegatorReward}"
+                validatorMetrics=" isJailed=$isJailed stake=$stake rank=$rank pctRank=$pctRank validatorCommission=$validatorCommission delegatorReward=${delegatorReward} activeValidators=$activeValidators pctActiveValidators=$pctActiveValidators"
                 if [ "$GOVERNANCE" == "on" ]; then
                     proposals=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/gov/v1beta1/proposals?pagination.limit=10000)
                     votingPeriodIds=$(jq -r '.proposals[] | select(.status == "PROPOSAL_STATUS_VOTING_PERIOD") | .proposal_id' <<<$proposals)
@@ -286,48 +293,41 @@ while true; do
                     urgentVotes=0
                     gov=""
                     for id in $votingPeriodIds; do
-                        #echo $id
                         proposal=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/gov/v1beta1/proposals/${id})
                         vote=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/gov/v1beta1/proposals/${id}/votes/${DELEGATORADDRESS})
                         votingEndTime=$(jq -r ".proposal.voting_end_time" <<<$proposal)
-                        #echo $proposal
-                        #echo $vote
-                        #echo $votingEndTime
                         #if [ $(jq -r ".code" <<<$vote) == "3" ]; then
                         if [ "$(jq -r '.vote' <<<$vote)" == "null" ]; then
                             ((newProposalsCount += 1))
                             voteDaysLeft=$(echo "scale=2 ; ($(date -d $votingEndTime +%s) - $(date -d now +%s)) / 86400" | bc)
                             voteDaysLeft=$(echo $voteDaysLeft | bc | awk '{printf "%f", $0}')
-                            #echo $voteDaysLeft
-                            #echo $VOTEURGENCY
-                            if (($(echo "$voteDaysLeft < $VOTEURGENCY" | bc -l))); then ((urgentVotes = $urgentVotes + 1)); fi
-
+                            if (($(echo "$voteDaysLeft <= $VOTEURGENCY" | bc -l))); then ((urgentVotes = $urgentVotes + 1)); fi
                         fi
                     done
                     govInfo=" newProposals=$newProposalsCount urgentVotes=$urgentVotes"
                 fi
-                if [ "$VERSIONCHECK" == "on" ]; then
-                    versions=$(echo $"$(git ls-remote --tags --refs --sort v:refname $REMOTEREPOSITORY)" | grep $versionspec)
-                    versions_=$(echo $"$versions" | grep $version -A 10)
-                    versions=$(wc -l <<<$versions_)
-                    if [ "$versions" -gt "1" ]; then
-                        isLatestVersion="false"
-                    elif [ "$versions" -eq "1" ]; then
-                        isLatestVersion="true"
-                    else
-                        isLatestVersion=""
-                    fi
-                    versionInfo=" isLatestVersion=$isLatestVersion"
-                fi
             fi
         fi
+        if [[ "$enableAPI" == "true" ]]; then
+            versions=$(echo $"$(git ls-remote --tags --refs --sort v:refname $REMOTEREPOSITORY)" | grep $versionspec)
+            versions_=$(echo $"$versions" | grep $version -A 10)
+            versions=$(wc -l <<<$versions_)
+            if [ "$versions" -gt "1" ]; then
+                isLatestVersion="false"
+            elif [ "$versions" -eq "1" ]; then
+                isLatestVersion="true"
+            else
+                isLatestVersion=""
+            fi
+            versionInfo=" isLatestVersion=$isLatestVersion"
+        fi
         status="$catchingUp"
-        now=$(date $TIMEFORMAT)
+        now=$(date $timeformat)
         blockHeightFromNow=$(($(date +%s -d "$now") - $(date +%s -d $blockTime)))
-        variables="status=$status height=$height elapsed=$blockHeightFromNow peers=$peers persistentPeersOff=$persistentPeersOff $validatorInfo${validatorMetrics}${govInfo}${versionInfo}"
+        variables="status=$status height=$height elapsed=$blockHeightFromNow peers=$peers${persistentPeersInfo} pctTotCommits=${pctTotCommits}${validatorInfo}${validatorMetrics}${govInfo}${versionInfo}"
     else
         status="error"
-        now=$(date $TIMEFORMAT)
+        now=$(date $timeformat)
         variables="status=$status"
     fi
 
@@ -368,8 +368,8 @@ while true; do
         ;;
     esac
 
-    pctPrecommits=$(awk '{printf "%f", $0}' <<<"$pctPrecommits")
-    if [[ "$isValidator" == "true" ]] && [[ "$pctPrecommits" < "1.0" ]]; then color=$colorW; fi
+    #pctPrecommits=$(awk '{printf "%f", $0}' <<<"$pctPrecommits")
+    if [[ "$isValidator" == "true" ]] && (($(echo "$pctPrecommits < 100.0" | bc))); then color=$colorW; fi
     if [ "$isValidator" == "false" ]; then color=$colorW; fi
 
     logEntry="$(sed 's/[^ ]*[\=]/'\\${color}'&'\\${noColor}'/g' <<<$logEntry)"
