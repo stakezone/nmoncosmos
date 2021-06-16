@@ -18,7 +18,7 @@ PRECOMMITS="20"          # check last n precommits, can be 0 for no checking
 VALIDATORADDRESS=""      # if left empty default is from status call (validator)
 CHECKPERSISTENTPEERS="1" # if 1 the number of disconnected persistent peers is checked (when persistent peers are configured in config.toml)
 TIMEFORMAT="-u --rfc-3339=seconds" # date format for log line entries
-### API access required:
+### API access required: #
 VALIDATORMETRICS="on"    # advanced validator metrics, api must be enabled in app.toml
 GOVERNANCE="on"          # vote checks, 'VALIDATORMETRICS' must be 'on'
 VOTEURGENCY="3.0"        # threshold in days for time left for new proposals to become urgent votes
@@ -184,7 +184,7 @@ if [ "$CHECKPERSISTENTPEERS" -eq 1 ]; then
 fi
 
 echo ""
-if [ $PRECOMMITS -eq 0 ]; then echo "precommit checks: off"; else echo "precommit checks: last $PRECOMMITS"; fi
+if [ $PRECOMMITS -eq 0 ]; then echo "precommit checks: off"; else echo "precommit checks: on"; fi
 if [ $CHECKPERSISTENTPEERS -eq 0 ]; then echo "persistent peer checks: off"; else echo "persistent peer checks: on"; fi
 if [[ "$VALIDATORMETRICS" == "on" ]]; then echo "validator metrics: on"; else echo "validator metrics: off"; fi
 if [[ "$GOVERNANCE" == "on" ]] && [[ "$VALIDATORMETRICS" == "on" ]]; then echo "governance check: vote urgency ${VOTEURGENCY} days"; else echo "governance check: off"; fi
@@ -220,7 +220,7 @@ while true; do
         blockTime=$(jq -r '.result.sync_info.latest_block_time' <<<$status)
         catchingUp=$(jq -r '.result.sync_info.catching_up' <<<$status)
         votingPower=$(jq -r '.result.validator_info.voting_power' <<<$status)
-        if [ $catchingUp == "false" ]; then catchingUp="synced"; elif [ $catchingUp == "true" ]; then catchingUp="catchingUp"; fi
+        if [ $catchingUp == "false" ]; then catchingUp="synced"; elif [ $catchingUp == "true" ]; then catchingUp="catchingup"; fi
         if [ "$CHECKPERSISTENTPEERS" -eq 1 ]; then
             persistentPeersMatch=0
             netInfo=$(curl -s "$url"/net_info)
@@ -264,12 +264,12 @@ while true; do
                 votingPower=$(jq -r '.validator | select(.operator_address == '\"$valoper\"') | .tokens' <<<$validator)
                 votingPower=$(echo "scale=2 ; $votingPower / 1000000.0" | bc)
                 activeValidators=$(jq -r 'length' <<<$validators)
-                rank_=$(jq -r 'map(.address == '\"$VALIDATORADDRESS\"') | index(true)' <<<$validators)
-                if [[ "$rank_" != "null" ]]; then ((rank_ += 1)); rank="$rank_"; fi
+                rank=$(jq -r 'map(.address == '\"$VALIDATORADDRESS\"') | index(true)' <<<$validators)
+                ((rank += 1))
                 validatorParams=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/staking/v1beta1/params)
                 totValidators=$(jq -r '.params.max_validators' <<<$validatorParams)
                 bondDenomination=$(jq -r '.params.bond_denom' <<<$validatorParams)
-                if [ -n "$rank" ]; then pctRank=$(echo "scale=2 ; $rank / $totValidators" | bc); fi
+                pctRank=$(echo "scale=2 ; $rank / $totValidators" | bc)
                 pctActiveValidators=$(echo "scale=2 ; $activeValidators / $totValidators" | bc)
                 validatorCommission=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/distribution/v1beta1/validators/${valoper}/commission)
                 validatorCommission=$(jq -r '.commission.commission[] | select(.denom == '\"$bondDenomination\"') | .amount' <<<$validatorCommission)
@@ -286,19 +286,20 @@ while true; do
                     urgentVotes=0
                     gov=""
                     for id in $votingPeriodIds; do
-                        echo $id
+                        #echo $id
                         proposal=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/gov/v1beta1/proposals/${id})
                         vote=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/gov/v1beta1/proposals/${id}/votes/${DELEGATORADDRESS})
                         votingEndTime=$(jq -r ".proposal.voting_end_time" <<<$proposal)
                         #echo $proposal
                         #echo $vote
                         #echo $votingEndTime
-                        if [ $(jq -r ".code" <<<$vote) == "3" ]; then
-                            ((newProposalsCount = $newProposalsCount + 1))
+						((newProposalsCount += 1))
+                        #if [ $(jq -r ".code" <<<$vote) == "3" ]; then
+						if [ -n "$(jq -r '.vote' <<<$vote)" ]; then
                             voteDaysLeft=$(echo "scale=2 ; ($(date -d $votingEndTime +%s) - $(date -d now +%s)) / 86400" | bc)
                             voteDaysLeft=$(echo $voteDaysLeft | bc | awk '{printf "%f", $0}')
-                            echo $voteDaysLeft
-                            echo $VOTEURGENCY
+                            #echo $voteDaysLeft
+                            #echo $VOTEURGENCY
                             if (($(echo "$voteDaysLeft < $VOTEURGENCY" | bc -l))); then ((urgentVotes = $urgentVotes + 1)); fi
 
                         fi
