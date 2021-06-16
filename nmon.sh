@@ -185,7 +185,7 @@ fi
 
 echo ""
 if [ $PRECOMMITS -eq 0 ]; then echo "precommit checks: off"; else echo "precommit checks: on"; fi
-if [ $CHECKPERSISTENTPEERS -eq 0 ]; then echo "persistent peer checks: off"; else echo "persistent peer checks: on"; fi
+if [ $CHECKPERSISTENTPEERS -eq 0 ]; then echo "persistent peer checks: off"; else echo "persistent peer checks: last $PRECOMMITS"; fi
 if [[ "$VALIDATORMETRICS" == "on" ]]; then echo "validator metrics: on"; else echo "validator metrics: off"; fi
 if [[ "$GOVERNANCE" == "on" ]] && [[ "$VALIDATORMETRICS" == "on" ]]; then echo "governance check: vote urgency ${VOTEURGENCY} days"; else echo "governance check: off"; fi
 if [[ "$VERSIONCHECK" == "on" ]] && [[ "$VALIDATORMETRICS" == "on" ]]; then echo "git version check: $VERSIONING"; else echo "git version check: off"; fi
@@ -294,9 +294,9 @@ while true; do
                         #echo $vote
                         #echo $votingEndTime
                         #if [ $(jq -r ".code" <<<$vote) == "3" ]; then
-			if [ "$(jq -r '.vote' <<<$vote)" == "null" ]; then
-			    ((newProposalsCount += 1))
-			    voteDaysLeft=$(echo "scale=2 ; ($(date -d $votingEndTime +%s) - $(date -d now +%s)) / 86400" | bc)
+                        if [ "$(jq -r '.vote' <<<$vote)" == "null" ]; then
+                            ((newProposalsCount += 1))
+                            voteDaysLeft=$(echo "scale=2 ; ($(date -d $votingEndTime +%s) - $(date -d now +%s)) / 86400" | bc)
                             voteDaysLeft=$(echo $voteDaysLeft | bc | awk '{printf "%f", $0}')
                             #echo $voteDaysLeft
                             #echo $VOTEURGENCY
@@ -370,7 +370,7 @@ while true; do
 
     pctPrecommits=$(awk '{printf "%f", $0}' <<<"$pctPrecommits")
     if [[ "$isValidator" == "true" ]] && [[ "$pctPrecommits" < "1.0" ]]; then color=$colorW; fi
-    if [[ "$isValidator" == "false" ]] && [[ $VALIDATORMETRICS == "on" ]]; then color=$colorW; fi
+    if [ "$isValidator" == "false" ]; then color=$colorW; fi
 
     logEntry="$(sed 's/[^ ]*[\=]/'\\${color}'&'\\${noColor}'/g' <<<$logEntry)"
     echo -e $logEntry
