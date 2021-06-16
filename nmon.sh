@@ -14,13 +14,13 @@ LOGPATH="$(pwd)"          # the directory where the log file is stored, for cust
 LOGSIZE=200               # the max number of lines after that the log will be trimmed to reduce its size
 LOGROTATION="1"           # options for log rotation: (1) rotate to $LOGNAME.1 every $LOGSIZE lines;  (2) append to $LOGNAME.1 every $LOGSIZE lines; (3) truncate $logFile to $LOGSIZE every iteration
 SLEEP1="30s"              # polls every SLEEP1 sec
-VALIDATORADDRESS=""       # if left empty default is from status call (validator)
 CHECKPERSISTENTPEERS="on" # if 'on' the number of disconnected persistent peers is checked (when persistent peers are configured in config.toml)
-VERSIONCHECK="on"         # checks the git repository for newer versions, 'VALIDATORMETRICS' must be 'on'
+### api access required:  #
+VERSIONCHECK="on"         # checks the git repository for newer versions
 VERSIONING="patch"        # 'major.minor.patch-revision', 'patch' recommended for production, 'revision' for beta or rc (testnet)
 REMOTEREPOSITORY=""       # remote repository is auto-discovered, however if eg. only the binary is deployed or it is not located under 'SHOME' it fails
-### api access required:  #
 VALIDATORMETRICS="on"     # advanced validator metrics, api must be enabled in app.toml
+VALIDATORADDRESS=""       # if left empty default is for this node from status call, any valid validator address can be monitored
 PRECOMMITS="20"           # check last n precommits, can be 0 for no checking
 GOVERNANCE="on"           # vote checks, 'VALIDATORMETRICS' must be 'on'
 VOTEURGENCY="3.0"         # threshold in days for time left for new proposals to become urgent votes
