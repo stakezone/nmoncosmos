@@ -184,8 +184,8 @@ if [ "$CHECKPERSISTENTPEERS" -eq 1 ]; then
 fi
 
 echo ""
-if [ $PRECOMMITS -eq 0 ]; then echo "precommit checks: off"; else echo "precommit checks: on"; fi
-if [ $CHECKPERSISTENTPEERS -eq 0 ]; then echo "persistent peer checks: off"; else echo "persistent peer checks: last $PRECOMMITS"; fi
+if [ $PRECOMMITS -eq 0 ]; then echo "precommit checks: off"; else echo "precommit checks: last $PRECOMMITS"; fi
+if [ $CHECKPERSISTENTPEERS -eq 0 ]; then echo "persistent peer checks: off"; else echo "persistent peer checks: on"; fi
 if [[ "$VALIDATORMETRICS" == "on" ]]; then echo "validator metrics: on"; else echo "validator metrics: off"; fi
 if [[ "$GOVERNANCE" == "on" ]] && [[ "$VALIDATORMETRICS" == "on" ]]; then echo "governance check: vote urgency ${VOTEURGENCY} days"; else echo "governance check: off"; fi
 if [[ "$VERSIONCHECK" == "on" ]] && [[ "$VALIDATORMETRICS" == "on" ]]; then echo "git version check: $VERSIONING"; else echo "git version check: off"; fi
