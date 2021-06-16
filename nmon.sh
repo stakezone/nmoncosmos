@@ -293,10 +293,10 @@ while true; do
                         #echo $proposal
                         #echo $vote
                         #echo $votingEndTime
-						((newProposalsCount += 1))
                         #if [ $(jq -r ".code" <<<$vote) == "3" ]; then
-						if [ -n "$(jq -r '.vote' <<<$vote)" ]; then
-                            voteDaysLeft=$(echo "scale=2 ; ($(date -d $votingEndTime +%s) - $(date -d now +%s)) / 86400" | bc)
+			if [ -z "$(jq -r '.vote' <<<$vote)" ]; then
+			    ((newProposalsCount += 1))
+			    voteDaysLeft=$(echo "scale=2 ; ($(date -d $votingEndTime +%s) - $(date -d now +%s)) / 86400" | bc)
                             voteDaysLeft=$(echo $voteDaysLeft | bc | awk '{printf "%f", $0}')
                             #echo $voteDaysLeft
                             #echo $VOTEURGENCY
