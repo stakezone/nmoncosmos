@@ -258,7 +258,7 @@ while true; do
                 done
                 pctPrecommits=$(echo "scale=2 ; 100 * $precommitCount / $PRECOMMITS_" | bc)
 
-                validatorInfo=" isValidator=$isValidator pctPrecommits=$pctPrecommits"
+                validatorInfo=" pctPrecommits=$pctPrecommits isValidator=$isValidator"
             else
                 isValidator="false"
                 validatorInfo=" isValidator=$isValidator"
