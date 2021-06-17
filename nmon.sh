@@ -273,6 +273,7 @@ while true; do
                 activeValidators=$(jq -r 'length' <<<$validators)
                 rank=$(jq -r 'map(.address == '\"$VALIDATORADDRESS\"') | index(true)' <<<$validators)
                 ((rank += 1))
+				if [[ "$isJailed" == "true" ]]; then rank="0"; fi
                 validatorParams=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/staking/v1beta1/params)
                 totValidators=$(jq -r '.params.max_validators' <<<$validatorParams)
                 bondDenomination=$(jq -r '.params.bond_denom' <<<$validatorParams)
