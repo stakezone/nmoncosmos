@@ -39,7 +39,7 @@ if [ -z $CONFIG ]; then
     exit 1
 fi
 url=$(sed '/^\[rpc\]/,/^\[/!d;//d' $CONFIG/config.toml | grep "^laddr\b" | awk -v FS='("tcp://|")' '{print $2}')
-chainID=$(jq -r '.result.node_info.network' <<<$(curl -s "$url"/status))
+chainId=$(jq -r '.result.node_info.network' <<<$(curl -s "$url"/status))
 nodeID=$(jq -r '.result.node_info.id' <<<$(curl -s "$url"/status))
 if [ -z $url ]; then
     echo "please configure the config directory in the script correctly"
@@ -149,7 +149,7 @@ else
 fi
 
 echo ""
-echo "chain id: ${chainID}"
+echo "chain id: ${chainId}"
 echo "node id: ${nodeID}"
 echo "moniker: ${moniker}"
 echo "validator address: $VALIDATORADDRESS"
@@ -211,7 +211,7 @@ logLines=$(wc -l <$logFile)
 if [ $logLines -gt $LOGSIZE ]; then sed -i "1,$(($logLines - $LOGSIZE))d" $logFile; fi # the log file is trimmed for logsize
 
 date=$(date $timeformat)
-echo "$date status=scriptstarted chainID=$chainID" >>$logFile
+echo "$date status=scriptstarted chainId=$chainId" >>$logFile
 
 while true; do
     status=$(curl -s "$url"/status)
@@ -219,7 +219,7 @@ while true; do
     if [ "$result" != "0" ]; then
         peers=$(curl -s "$url"/net_info | jq -r '.result.n_peers')
         if [ -z $peers ]; then peers="na"; fi
-		chainID=$(jq -r '.result.node_info.network' <<<$(curl -s "$url"/status))
+		chainId=$(jq -r '.result.node_info.network' <<<$(curl -s "$url"/status))
         height=$(jq -r '.result.sync_info.latest_block_height' <<<$status)
         blockTime=$(jq -r '.result.sync_info.latest_block_time' <<<$status)
         catchingUp=$(jq -r '.result.sync_info.catching_up' <<<$status)
@@ -327,7 +327,7 @@ while true; do
         status="$catchingUp"
         now=$(date $timeformat)
         blockHeightFromNow=$(($(date +%s -d "$now") - $(date +%s -d $blockTime)))
-        variables="chainID=$chainID status=$status height=$height elapsed=$blockHeightFromNow peers=$peers${persistentPeersInfo} pctTotCommits=${pctTotCommits}${validatorMetrics}${govInfo}${versionInfo}"
+        variables="chainId=$chainId status=$status height=$height elapsed=$blockHeightFromNow peers=$peers${persistentPeersInfo} pctTotCommits=${pctTotCommits}${validatorMetrics}${govInfo}${versionInfo}"
     else
         status="error"
         now=$(date $timeformat)
