@@ -7,20 +7,20 @@
 ###    if suppressing error messages is preferred, run as './nmon.sh 2> /dev/null'
 
 ###    CONFIG    ##################################################################################################
-CONFIG=""                 # config directory for node, eg. $HOME/.gaia/config
+CONFIG=""                 # config directory for node, eg. '$HOME/.gaia/config'
 ### optional:             #
 LOGNAME=""                # a custom log file name can be chosen, if left empty default is nmon-<username>.log
 LOGPATH="$(pwd)"          # the directory where the log file is stored, for customization insert path like: /my/path
-LOGSIZE=200               # the max number of lines after that the log will be trimmed to reduce its size
+LOGSIZE=200               # the max number of lines after that the log gets trimmed to reduce its size
 LOGROTATION="1"           # options for log rotation: (1) rotate to $LOGNAME.1 every $LOGSIZE lines;  (2) append to $LOGNAME.1 every $LOGSIZE lines; (3) truncate $logFile to $LOGSIZE every iteration
 SLEEP1="30s"              # polls every SLEEP1 sec
-CHECKPERSISTENTPEERS="on" # if 'on' the number of disconnected persistent peers is checked (when persistent peers are configured in config.toml)
+CHECKPERSISTENTPEERS="on" # if 'on' the number of disconnected persistent peers is checked
 ### api access required:  #
 VERSIONCHECK="on"         # checks the git repository for newer versions
 VERSIONING="patch"        # 'major.minor.patch-revision', 'patch' recommended for production, 'revision' for beta or rc (testnet)
 REMOTEREPOSITORY=""       # remote repository is auto-discovered, however if eg. only the binary is deployed or it is not located under 'SHOME' it fails
 VALIDATORMETRICS="on"     # advanced validator metrics, api must be enabled in app.toml
-VALIDATORADDRESS=""       # if left empty default is for this node from status call, any valid validator address can be monitored
+VALIDATORADDRESS=""       # if left empty default is from status call, any valid validator address can be monitored
 PRECOMMITS="20"           # check last n precommits, can be 0 for no checking
 GOVERNANCE="on"           # vote checks, 'VALIDATORMETRICS' must be 'on'
 VOTEURGENCY="3.0"         # threshold in days for time left for new proposals to become urgent votes
@@ -248,10 +248,7 @@ while true; do
                 validators=$(jq -r '. | sort_by((.voting_power)|tonumber) | reverse' <<<$validators)
                 precommitCount=0
                 for ((i = $(($height - $PRECOMMITS_ + 1)); i <= $height; i++)); do
-                    validatorAddresses=$(
-                        curl -s "$url"/block?height="$i" &
-                        per_page=10000
-                    )
+                    validatorAddresses=$(curl -s "$url"/block?height="$i"&per_page=10000)
                     validatorAddresses=$(jq ".result.block.last_commit.${versionIdentifier}[].validator_address" <<<$validatorAddresses)
                     validatorPrecommit=$(grep -c "$VALIDATORADDRESS" <<<$validatorAddresses)
                     precommitCount=$(($precommitCount + $validatorPrecommit))
@@ -273,7 +270,7 @@ while true; do
                 activeValidators=$(jq -r 'length' <<<$validators)
                 rank=$(jq -r 'map(.address == '\"$VALIDATORADDRESS\"') | index(true)' <<<$validators)
                 ((rank += 1))
-				if [[ "$isJailed" == "true" ]]; then rank="0"; fi
+                if [[ "$isJailed" == "true" ]]; then rank="0"; fi
                 validatorParams=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/staking/v1beta1/params)
                 totValidators=$(jq -r '.params.max_validators' <<<$validatorParams)
                 bondDenomination=$(jq -r '.params.bond_denom' <<<$validatorParams)
@@ -285,8 +282,12 @@ while true; do
                 delegatorRewards=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/distribution/v1beta1/delegators/${DELEGATORADDRESS}/rewards)
                 delegatorReward=$(jq -r '.rewards[] | select(.validator_address == '\"$valoper\"') | .reward[] |  select(.denom == '\"$bondDenomination\"') | .amount' <<<$delegatorRewards)
                 delegatorReward=$(echo "scale=2 ; $delegatorReward / 1000000.0" | bc)
+                pool=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/staking/v1beta1/pool)
+                bondedTokens=$(jq -r '.pool.bonded_tokens' <<<$pool)
+                notBondedTokens=$(jq -r '.pool.not_bonded_tokens' <<<$pool)
+                pctTotStake=$(echo "scale=2 ; 100 * $bondedTokens / ($notBondedTokens + $bondedTokens)" | bc)
 
-                validatorMetrics=" isJailed=$isJailed stake=$stake rank=$rank pctRank=$pctRank validatorCommission=$validatorCommission delegatorReward=${delegatorReward} activeValidators=$activeValidators pctActiveValidators=$pctActiveValidators"
+                validatorMetrics=" isJailed=$isJailed stake=$stake rank=$rank pctRank=$pctRank validatorCommission=$validatorCommission delegatorReward=${delegatorReward} activeValidators=$activeValidators pctActiveValidators=$pctActiveValidators pctTotStake=$pctTotStake"
                 if [ "$GOVERNANCE" == "on" ]; then
                     proposals=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/gov/v1beta1/proposals?pagination.limit=10000)
                     votingPeriodIds=$(jq -r '.proposals[] | select(.status == "PROPOSAL_STATUS_VOTING_PERIOD") | .proposal_id' <<<$proposals)
@@ -302,7 +303,7 @@ while true; do
                             ((newProposalsCount += 1))
                             voteDaysLeft=$(echo "scale=2 ; ($(date -d $votingEndTime +%s) - $(date -d now +%s)) / 86400" | bc)
                             voteDaysLeft=$(echo $voteDaysLeft | bc | awk '{printf "%f", $0}')
-                            if (($(echo "$voteDaysLeft <= $VOTEURGENCY" | bc -l))); then ((urgentVotes = $urgentVotes + 1)); fi
+                            if (($(echo "$voteDaysLeft <= $VOTEURGENCY" | bc -l))); then ((urgentVotes += 1)); fi
                         fi
                     done
                     govInfo=" newProposals=$newProposalsCount urgentVotes=$urgentVotes"
