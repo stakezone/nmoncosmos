@@ -11,7 +11,7 @@ CONFIG=""                 # config directory for node, eg. '$HOME/.gaia/config'
 ### optional:             #
 LOGNAME=""                # a custom log file name can be chosen, if left empty default is nmon-<username>.log
 LOGPATH="$(pwd)"          # the directory where the log file is stored, for customization insert path like: /my/path
-LOGSIZE=200               # the max number of lines after that the log gets trimmed to reduce its size
+LOGSIZE="200"               # the max number of lines after that the log gets trimmed to reduce its size
 LOGROTATION="1"           # options for log rotation: (1) rotate to $LOGNAME.1 every $LOGSIZE lines;  (2) append to $LOGNAME.1 every $LOGSIZE lines; (3) truncate $logFile to $LOGSIZE every iteration
 SLEEP1="30s"              # polls every SLEEP1 sec
 CHECKPERSISTENTPEERS="on" # if 'on' the number of disconnected persistent peers is checked
@@ -219,6 +219,7 @@ while true; do
     if [ "$result" != "0" ]; then
         peers=$(curl -s "$url"/net_info | jq -r '.result.n_peers')
         if [ -z $peers ]; then peers="na"; fi
+		chainID=$(jq -r '.result.node_info.network' <<<$(curl -s "$url"/status))
         height=$(jq -r '.result.sync_info.latest_block_height' <<<$status)
         blockTime=$(jq -r '.result.sync_info.latest_block_time' <<<$status)
         catchingUp=$(jq -r '.result.sync_info.catching_up' <<<$status)
@@ -255,7 +256,7 @@ while true; do
                 done
                 pctPrecommits=$(echo "scale=2 ; 100 * $precommitCount / $PRECOMMITS_" | bc)
 
-                validatorInfo=" pctPrecommits=$pctPrecommits isValidator=$isValidator"
+                validatorInfo=" isValidator=$isValidator pctPrecommits=$pctPrecommits"
             else
                 isValidator="false"
                 validatorInfo=" isValidator=$isValidator"
@@ -287,7 +288,7 @@ while true; do
                 notBondedTokens=$(jq -r '.pool.not_bonded_tokens' <<<$pool)
                 pctTotStake=$(echo "scale=2 ; 100 * $bondedTokens / ($notBondedTokens + $bondedTokens)" | bc)
 
-                validatorMetrics=" isJailed=$isJailed stake=$stake rank=$rank pctRank=$pctRank validatorCommission=$validatorCommission delegatorReward=${delegatorReward} activeValidators=$activeValidators pctActiveValidators=$pctActiveValidators pctTotStake=$pctTotStake"
+                validatorMetrics=" pctTotStake=$pctTotStake activeValidators=$activeValidators pctActiveValidators=$pctActiveValidators${validatorInfo} isJailed=$isJailed stake=$stake rank=$rank pctRank=$pctRank validatorCommission=$validatorCommission delegatorReward=${delegatorReward}"
                 if [ "$GOVERNANCE" == "on" ]; then
                     proposals=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/gov/v1beta1/proposals?pagination.limit=10000)
                     votingPeriodIds=$(jq -r '.proposals[] | select(.status == "PROPOSAL_STATUS_VOTING_PERIOD") | .proposal_id' <<<$proposals)
@@ -326,7 +327,7 @@ while true; do
         status="$catchingUp"
         now=$(date $timeformat)
         blockHeightFromNow=$(($(date +%s -d "$now") - $(date +%s -d $blockTime)))
-        variables="status=$status height=$height elapsed=$blockHeightFromNow peers=$peers${persistentPeersInfo} pctTotCommits=${pctTotCommits}${validatorInfo}${validatorMetrics}${govInfo}${versionInfo}"
+        variables="chainID=$chainID status=$status height=$height elapsed=$blockHeightFromNow peers=$peers${persistentPeersInfo} pctTotCommits=${pctTotCommits}${validatorMetrics}${govInfo}${versionInfo}"
     else
         status="error"
         now=$(date $timeformat)
