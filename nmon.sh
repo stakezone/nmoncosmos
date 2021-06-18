@@ -11,7 +11,7 @@ CONFIG=""                 # config directory for node, eg. '$HOME/.gaia/config'
 ### optional:             #
 LOGNAME=""                # a custom log file name can be chosen, if left empty default is nmon-<username>.log
 LOGPATH="$(pwd)"          # the directory where the log file is stored, for customization insert path like: /my/path
-LOGSIZE="200"               # the max number of lines after that the log gets trimmed to reduce its size
+LOGSIZE="200"             # the max number of lines after that the log gets trimmed to reduce its size
 LOGROTATION="1"           # options for log rotation: (1) rotate to $LOGNAME.1 every $LOGSIZE lines;  (2) append to $LOGNAME.1 every $LOGSIZE lines; (3) truncate $logFile to $LOGSIZE every iteration
 SLEEP1="30s"              # polls every SLEEP1 sec
 CHECKPERSISTENTPEERS="on" # if 'on' the number of disconnected persistent peers is checked
@@ -243,6 +243,7 @@ while true; do
         pctTotCommits=$(grep -Po "=\s+\K[^ ^]+" <<<$pctTotCommits)
         pctTotCommits=$(echo "scale=2 ; 100 * $pctTotCommits" | bc)
         if [ "$VALIDATORMETRICS" == "on" ]; then
+		    validatorAddress="${VALIDATORADDRESS:0:6}"
             isValidator=$(grep -c "$VALIDATORADDRESS" <<<$validators)
             if [ "$isValidator" != "0" ]; then
                 isValidator="true"
@@ -256,10 +257,10 @@ while true; do
                 done
                 pctPrecommits=$(echo "scale=2 ; 100 * $precommitCount / $PRECOMMITS_" | bc)
 
-                validatorInfo=" isValidator=$isValidator pctPrecommits=$pctPrecommits"
+                validatorInfo=" validatorAddress=$validatorAddress isValidator=$isValidator pctPrecommits=$pctPrecommits"
             else
                 isValidator="false"
-                validatorInfo=" isValidator=$isValidator"
+                validatorInfo=" validatorAddress=$validatorAddress isValidator=$isValidator pctPrecommits="
             fi
             validator=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/staking/v1beta1/validators/${valoper})
             isJailed=$(jq -r '.validator.jailed' <<<$validator)
