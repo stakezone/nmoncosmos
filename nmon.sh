@@ -38,14 +38,20 @@ if [ -z $CONFIG ]; then
     echo "please configure the config directory in the script"
     exit 1
 fi
+
 url=$(sed '/^\[rpc\]/,/^\[/!d;//d' $CONFIG/config.toml | grep "^laddr\b" | awk -v FS='("tcp://|")' '{print $2}')
-chainId=$(jq -r '.result.node_info.network' <<<$(curl -s "$url"/status))
-nodeID=$(jq -r '.result.node_info.id' <<<$(curl -s "$url"/status))
 if [ -z $url ]; then
     echo "please configure the config directory in the script correctly"
     exit 1
 fi
 url="http://${url}"
+status=$(curl -s "$url"/status)
+height=$(jq -r '.result.sync_info.latest_block_height' <<<$status)
+chainId=$(jq -r '.result.node_info.network' <<<$status)
+nodeID=$(jq -r '.result.node_info.id' <<<$status)
+
+#netMoniker=$(cat $CONFIG/config.toml | grep "^moniker\b" | awk '{print $3}')
+#echo "net moniker: $(sed -e 's/^"//' -e 's/"$//' <<<$netMoniker)"
 
 if [ -z $LOGNAME ]; then LOGNAME="nmon-${USER}.log"; fi
 logFile="${LOGPATH}/${LOGNAME}"
@@ -55,7 +61,6 @@ echo "log file: ${logFile}"
 echo "rpc: ${url}"
 
 if [ -z $VALIDATORADDRESS ]; then
-    status=$(curl -s "$url"/status)
     VALIDATORADDRESS=$(jq -r '.result.validator_info.address' <<<$status)
 else
     flag1="1"
@@ -66,8 +71,12 @@ if [ -z $VALIDATORADDRESS ]; then
 fi
 
 if [ "$flag1" == "1" ]; then
-    validators=$(curl -s "$url"/validators?per_page=10000)
-    validatorPubkey=$(jq -r '.result.validators[] | select(.address=='\"$VALIDATORADDRESS\"') | .pub_key.value' <<<$validators)
+    for i in {1..4}; do
+        validators=$(curl -s "${url}/validators?height=${height}&page=${i}&per_page=100")
+        if [[ "$(jq -r '.error' <<<$validators)" != "null" ]]; then break; fi
+        validatorPubkey=$(jq -r '.result.validators[] | select(.address=='\"$VALIDATORADDRESS\"') | .pub_key.value' <<<$validators)
+        if [[ ! -z "$validatorPubkey" ]]; then break; fi
+    done
 else
     validatorPubkey=$(jq -r '.result.validator_info.pub_key.value' <<<$status)
 fi
@@ -81,8 +90,6 @@ if [ $enableAPI == "true" ]; then
         echo "node information unavailable, please check api configuration and restart the node."
         exit 1
     fi
-    validators=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/staking/v1beta1/validators?pagination.limit=10000)
-    pubkey=$(jq -r '.application_version.app_name' <<<$nodeInfo)
     app=$(jq -r '.application_version.name' <<<$nodeInfo)
     appName=$(jq -r '.application_version.app_name' <<<$nodeInfo)
     version=$(jq -r '.application_version.version' <<<$nodeInfo)
@@ -103,24 +110,6 @@ if [ $enableAPI == "true" ]; then
     gitCommit=$(jq -r '.application_version.git_commit' <<<$nodeInfo)
     goVersion=$(jq -r '.application_version.go_version' <<<$nodeInfo)
     goVersion=$(sed 's/go version //g' <<<$goVersion)
-    moniker=$(jq -r '.validators[] | select(.consensus_pubkey.key=='\"$validatorPubkey\"') | .description.moniker' <<<$validators)
-    valcons=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/base/tendermint/v1beta1/validatorsets/latest | jq -r '.validators[] | select(.pub_key.key=='\"$validatorPubkey\"') | .address')
-    valoper=$(jq -r '.validators[] | select(.consensus_pubkey.key=='\"$validatorPubkey\"') | .operator_address' <<<$validators)
-    addressIdentifier=$(grep -Po 'valoper\K[^ ^]{1,24}' <<<$valoper)
-    while true; do
-        delegations=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/staking/v1beta1/validators/${valoper}/delegations?pagination.key=${nextKey})
-        deladdress=$(jq -r '.delegation_responses[] | select(.delegation.delegator_address|test('\"$addressIdentifier\"')) | .delegation.delegator_address' <<<$delegations)
-        if [ ! -z $deladdress ]; then
-            DELEGATORADDRESS="$deladdress"
-            break
-        fi
-        nextKey=$(jq -r '.pagination.next_key' <<<$delegations)
-        total=$(jq -r '.pagination.total' <<<$delegations)
-        if [ $total == "0" ]; then
-            echo "delegator address not discovered, please set manually"
-            exit
-        fi
-    done
     echo "api: ${apiURL}"
     echo ""
     echo "application: ${app}"
@@ -141,6 +130,55 @@ if [ $enableAPI == "true" ]; then
         echo "remote repository: ${REMOTEREPOSITORY}"
     fi
     echo "go version: ${goVersion}"
+    echo ""
+
+    #validators=$(curl -s -X GET -H "Content-Type: application/json" "${apiURL}/cosmos/staking/v1beta1/validators?pagination.limit=1000")
+    #valoper=$(jq -r '.validators[] | select(.consensus_pubkey.key=='\"$validatorPubkey\"') | .operator_address' <<<$validators)
+    nextKey=""
+    while true; do
+        validators=$(curl -s -X GET -H "Content-Type: application/json" -G --data-urlencode "pagination.key=${nextKey}" "${apiURL}/cosmos/staking/v1beta1/validators")
+        valoper=$(jq -r '.validators[] | select(.consensus_pubkey.key=='\"$validatorPubkey\"') | .operator_address' <<<$validators)
+        moniker=$(jq -r '.validators[] | select(.consensus_pubkey.key=='\"$validatorPubkey\"') | .description.moniker' <<<$validators)
+        if [ ! -z "$valoper" ]; then break; fi
+        nextKey=$(jq -r '.pagination.next_key' <<<$validators)
+        if [ "$nextKey" == "null" ]; then break; fi
+    done
+    if [ -z $valoper ]; then
+        VALIDATORMETRICS="off"
+        echo -e "${colorE}validator ${VALIDATORADDRESS} not found, validator metrics turned off${noColor}"
+        echo ""
+    else
+        #valcons=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/base/tendermint/v1beta1/validatorsets/latest?pagination.limit=1000 | jq -r '.validators[] | select(.pub_key.key=='\"$validatorPubkey\"') | .address')
+        nextKey=""
+        while true; do
+            validatorsets=$(curl -s -X GET -H "Content-Type: application/json" -G --data-urlencode "pagination.key=${nextKey}" "${apiURL}/cosmos/base/tendermint/v1beta1/validatorsets/latest")
+            valcons=$(jq -r '.validators[] | select(.pub_key.key=='\"$validatorPubkey\"') | .address' <<<$validatorsets)
+            if [ ! -z "$valcons" ]; then break; fi
+            nextKey=$(jq -r '.pagination.next_key' <<<$validatorsets)
+            if [ "$nextKey" == "null" ]; then break; fi
+        done
+        addressIdentifier=$(grep -Po 'valoper\K[^ ^]{1,24}' <<<$valoper)
+        nextKey=""
+        while true; do
+            delegations=$(curl -s -X GET -H "Content-Type: application/json" -G --data-urlencode "pagination.key=${nextKey}" "${apiURL}/cosmos/staking/v1beta1/validators/${valoper}/delegations")
+            deladdress=$(jq -r '.delegation_responses[] | select(.delegation.delegator_address|test('\"$addressIdentifier\"')) | .delegation.delegator_address' <<<$delegations)
+            if [ ! -z "$deladdress" ]; then
+                DELEGATORADDRESS="$deladdress"
+                break
+            fi
+            nextKey=$(jq -r '.pagination.next_key' <<<$delegations)
+            if [ "$nextKey" == "null" ]; then
+                echo "delegator address not discovered, please set manually"
+                exit
+            fi
+        done
+        echo "moniker: ${moniker}"
+        echo "validator address: $VALIDATORADDRESS"
+        echo "operator address: ${valoper}"
+        echo "consensus address: ${valcons}"
+        if [ ! -z $DELEGATORADDRESS ]; then echo "delegator address: ${DELEGATORADDRESS}"; fi
+        echo ""
+    fi
 else
     if [ $VALIDATORMETRICS == "on" ]; then
         echo "please enable the api in app.toml"
@@ -148,17 +186,8 @@ else
     fi
 fi
 
-echo ""
 echo "chain id: ${chainId}"
 echo "node id: ${nodeID}"
-echo "moniker: ${moniker}"
-echo "validator address: $VALIDATORADDRESS"
-echo "operator address: ${valoper}"
-echo "consensus address: ${valcons}"
-if [ ! -z $DELEGATORADDRESS ]; then echo "delegator address: ${DELEGATORADDRESS}"; fi
-
-#netMoniker=$(cat $CONFIG/config.toml | grep "^moniker\b" | awk '{print $3}')
-#echo "net moniker: $(sed -e 's/^"//' -e 's/"$//' <<<$netMoniker)"
 
 echo ""
 if [ "$CHECKPERSISTENTPEERS" == "on" ]; then
@@ -193,7 +222,7 @@ echo ""
 
 status=$(curl -s "$url"/status)
 height=$(jq -r '.result.sync_info.latest_block_height' <<<$status)
-blockInfo=$(curl -s "$url"/block?height="$height&per_page=10000")
+blockInfo=$(curl -s "${url}/block?height=${height}")
 
 if [ "$(grep -c 'precommits' <<<$blockInfo)" != "0" ]; then versionIdentifier="precommits"; elif [ "$(grep -c 'signatures' <<<$blockInfo)" != "0" ]; then versionIdentifier="signatures"; else
     echo "json parameters of this version not recognised"
@@ -219,7 +248,7 @@ while true; do
     if [ "$result" != "0" ]; then
         peers=$(curl -s "$url"/net_info | jq -r '.result.n_peers')
         if [ -z $peers ]; then peers="na"; fi
-		chainId=$(jq -r '.result.node_info.network' <<<$(curl -s "$url"/status))
+        chainId=$(jq -r '.result.node_info.network' <<<$(curl -s "$url"/status))
         height=$(jq -r '.result.sync_info.latest_block_height' <<<$status)
         blockTime=$(jq -r '.result.sync_info.latest_block_time' <<<$status)
         catchingUp=$(jq -r '.result.sync_info.catching_up' <<<$status)
@@ -243,14 +272,14 @@ while true; do
         pctTotCommits=$(grep -Po "=\s+\K[^ ^]+" <<<$pctTotCommits)
         pctTotCommits=$(echo "scale=2 ; 100 * $pctTotCommits" | bc)
         if [ "$VALIDATORMETRICS" == "on" ]; then
-		    validatorAddress="${VALIDATORADDRESS:0:6}"
+            validatorAddress="${VALIDATORADDRESS:0:6}"
             isValidator=$(grep -c "$VALIDATORADDRESS" <<<$validators)
             if [ "$isValidator" != "0" ]; then
                 isValidator="true"
                 validators=$(jq -r '. | sort_by((.voting_power)|tonumber) | reverse' <<<$validators)
                 precommitCount=0
                 for ((i = $(($height - $PRECOMMITS_ + 1)); i <= $height; i++)); do
-                    validatorAddresses=$(curl -s "$url"/block?height="$i"&per_page=10000)
+                    validatorAddresses=$(curl -s "${url}/block?height=${i}")
                     validatorAddresses=$(jq ".result.block.last_commit.${versionIdentifier}[].validator_address" <<<$validatorAddresses)
                     validatorPrecommit=$(grep -c "$VALIDATORADDRESS" <<<$validatorAddresses)
                     precommitCount=$(($precommitCount + $validatorPrecommit))
@@ -278,9 +307,13 @@ while true; do
                 bondDenomination=$(jq -r '.params.bond_denom' <<<$validatorParams)
                 pctRank=$(echo "scale=2 ; 100 * $rank / $totValidators" | bc)
                 pctActiveValidators=$(echo "scale=2 ; 100 * $activeValidators / $totValidators" | bc)
-                validatorCommission=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/distribution/v1beta1/validators/${valoper}/commission)
-                validatorCommission=$(jq -r '.commission.commission[] | select(.denom == '\"$bondDenomination\"') | .amount' <<<$validatorCommission)
-                validatorCommission=$(echo "scale=2 ; $validatorCommission / 1000000.0" | bc)
+                validatorCommission=$(jq -r '.commission.commission[]' <<<$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/distribution/v1beta1/validators/${valoper}/commission))
+                if [ ! -z "$validatorCommission" ]; then
+                    validatorCommission=$(jq -r 'select(.denom == '\"$bondDenomination\"') | .amount' <<<$validatorCommission)
+                    validatorCommission=$(echo "scale=2 ; $validatorCommission / 1000000.0" | bc)
+                else
+                    validatorCommission=0
+                fi
                 delegatorRewards=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/distribution/v1beta1/delegators/${DELEGATORADDRESS}/rewards)
                 delegatorReward=$(jq -r '.rewards[] | select(.validator_address == '\"$valoper\"') | .reward[] |  select(.denom == '\"$bondDenomination\"') | .amount' <<<$delegatorRewards)
                 delegatorReward=$(echo "scale=2 ; $delegatorReward / 1000000.0" | bc)
@@ -291,7 +324,7 @@ while true; do
 
                 validatorMetrics=" pctTotStake=$pctTotStake activeValidators=$activeValidators pctActiveValidators=$pctActiveValidators${validatorInfo} isJailed=$isJailed stake=$stake rank=$rank pctRank=$pctRank validatorCommission=$validatorCommission delegatorReward=${delegatorReward}"
                 if [ "$GOVERNANCE" == "on" ]; then
-                    proposals=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/gov/v1beta1/proposals?pagination.limit=10000)
+                    proposals=$(curl -s -X GET -H "Content-Type: application/json" "${apiURL}/cosmos/gov/v1beta1/proposals?pagination.limit=1000")
                     votingPeriodIds=$(jq -r '.proposals[] | select(.status == "PROPOSAL_STATUS_VOTING_PERIOD") | .proposal_id' <<<$proposals)
                     newProposalsCount=0
                     urgentVotes=0
@@ -372,7 +405,6 @@ while true; do
         ;;
     esac
 
-    #pctPrecommits=$(awk '{printf "%f", $0}' <<<"$pctPrecommits")
     if [[ "$isValidator" == "true" ]] && (($(echo "$pctPrecommits < 100.0" | bc))); then color=$colorW; fi
     if [ "$isValidator" == "false" ]; then color=$colorW; fi
 
