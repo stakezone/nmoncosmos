@@ -11,22 +11,22 @@ CONFIG=""                 # config directory for node, eg. '$HOME/.gaia/config'
 ### optional:             #
 LOGNAME=""                # a custom log file name can be chosen, if left empty default is nmon-<username>.log
 LOGPATH="$(pwd)"          # the directory where the log file is stored, for customization insert path like: /my/path
-LOGSIZE="200"             # the max number of lines after that the log gets trimmed to reduce its size
+LOGSIZE="200"             # the max number of lines after that the log gets truncated to reduce its size
 LOGROTATION="1"           # options for log rotation: (1) rotate to $LOGNAME.1 every $LOGSIZE lines;  (2) append to $LOGNAME.1 every $LOGSIZE lines; (3) truncate $logFile to $LOGSIZE every iteration
 SLEEP1="30s"              # polls every SLEEP1 sec
 CHECKPERSISTENTPEERS="on" # if 'on' the number of disconnected persistent peers is checked
 ### api access required:  #
-VERSIONCHECK="on"         # checks the git repository for newer versions
-VERSIONING="patch"        # 'major.minor.patch-revision', 'patch' recommended for production, 'revision' for beta or rc (testnet)
+VERSIONCHECK="on"         # checks the git remote repository for newer versions
+VERSIONING="patch"        # 'major.minor.patch-revision', 'patch' recommended for production, 'revision' for alpha, beta or rc (testnet)
 REMOTEREPOSITORY=""       # remote repository is auto-discovered, however if eg. only the binary is deployed or it is not located under 'SHOME' it fails
 VALIDATORMETRICS="on"     # advanced validator metrics, api must be enabled in app.toml
 VALIDATORADDRESS=""       # if left empty default is from status call, any valid validator address can be monitored
 PRECOMMITS="20"           # check last n precommits, can be 0 for no checking
 GOVERNANCE="on"           # vote checks, 'VALIDATORMETRICS' must be 'on'
-VOTEURGENCY="3.0"         # threshold in days for time left for new proposals to become urgent votes
+VOTEURGENCY="3.0"         # threshold in days for time left for that new proposals become urgent votes
 DELEGATORADDRESS=""       # the self-delegation address is auto-discovered, however it can fail in case no self-delegation exists
 ###  internal:            #
-timeformat="-u --rfc-3339=seconds" # date format for log line entries
+timeFormat="-u --rfc-3339=seconds" # date format for log line entries
 colorI='\033[0;32m'       # black 30, red 31, green 32, yellow 33, blue 34, magenta 35, cyan 36, white 37
 colorD='\033[0;90m'       # for light color 9 instead of 3
 colorE='\033[0;31m'       #
@@ -71,7 +71,7 @@ if [ -z $VALIDATORADDRESS ]; then
 fi
 
 if [ "$flag1" == "1" ]; then
-    for i in {1..4}; do
+    for i in {1..10}; do
         validators=$(curl -s "${url}/validators?height=${height}&page=${i}&per_page=100")
         if [[ "$(jq -r '.error' <<<$validators)" != "null" ]]; then break; fi
         validatorPubkey=$(jq -r '.result.validators[] | select(.address=='\"$VALIDATORADDRESS\"') | .pub_key.value' <<<$validators)
@@ -95,16 +95,16 @@ if [ $enableAPI == "true" ]; then
     version=$(jq -r '.application_version.version' <<<$nodeInfo)
     case $VERSIONING in
     revision)
-        versionspec="v"$(sed 's/\./\\./g' <<<$(grep -Po '^[0-9]*\.[0-9]*\.' <<<$version))".*$"
+        versionSpec="v"$(sed 's/\./\\./g' <<<$(grep -Po '^[0-9]*\.[0-9]*\.' <<<$version))".*$"
         ;;
     patch)
-        versionspec="v"$(sed 's/\./\\./g' <<<$(grep -Po '^[0-9]*\.[0-9]*\.' <<<$version))"[0-9]*$"
+        versionSpec="v"$(sed 's/\./\\./g' <<<$(grep -Po '^[0-9]*\.[0-9]*\.' <<<$version))"[0-9]*$"
         ;;
     minor)
-        versionspec="v"$(sed 's/\./\\./g' <<<$(grep -Po '^[0-9]*\.' <<<$version))"[0-9]*\.[0-9]*$"
+        versionSpec="v"$(sed 's/\./\\./g' <<<$(grep -Po '^[0-9]*\.' <<<$version))"[0-9]*\.[0-9]*$"
         ;;
     major)
-        versionspec="v[0-9]*\.[0-9]*\.[0-9]*$"
+        versionSpec="v[0-9]*\.[0-9]*\.[0-9]*$"
         ;;
     esac
     gitCommit=$(jq -r '.application_version.git_commit' <<<$nodeInfo)
@@ -169,7 +169,7 @@ if [ $enableAPI == "true" ]; then
             nextKey=$(jq -r '.pagination.next_key' <<<$delegations)
             if [ "$nextKey" == "null" ]; then
                 echo "delegator address not discovered, please set manually"
-                exit
+                exit 1
             fi
         done
         echo "moniker: ${moniker}"
@@ -239,7 +239,7 @@ fi
 logLines=$(wc -l <$logFile)
 if [ $logLines -gt $LOGSIZE ]; then sed -i "1,$(($logLines - $LOGSIZE))d" $logFile; fi # the log file is trimmed for logsize
 
-date=$(date $timeformat)
+date=$(date $timeFormat)
 echo "$date status=scriptstarted chainId=$chainId" >>$logFile
 
 while true; do
@@ -261,7 +261,8 @@ while true; do
                 persistentPeersMatch=$(($persistentPeersMatch + $(grep -c "$id" <<<$netInfo)))
             done
             persistentPeersOff=$(($totPersistentPeerIds - $persistentPeersMatch))
-            persistentPeersInfo=" persistentPeersOff=$persistentPeersOff"
+			pctPersistentPeersOff=$(echo "scale=2 ; 100 * $persistentPeersOff / $totPersistentPeerIds" | bc)
+            persistentPeersInfo=" persistentPeersOff=$persistentPeersOff pctPersistentPeersOff=$pctPersistentPeersOff"
         else
             persistentPeersInfo=""
         fi
@@ -346,7 +347,7 @@ while true; do
             fi
         fi
         if [[ "$enableAPI" == "true" ]]; then
-            versions=$(echo $"$(git ls-remote --tags --refs --sort v:refname $REMOTEREPOSITORY)" | grep $versionspec)
+            versions=$(echo $"$(git ls-remote --tags --refs --sort v:refname $REMOTEREPOSITORY)" | grep $versionSpec)
             versions_=$(echo $"$versions" | grep $version -A 10)
             versions=$(wc -l <<<$versions_)
             if [ "$versions" -gt "1" ]; then
@@ -359,12 +360,12 @@ while true; do
             versionInfo=" isLatestVersion=$isLatestVersion"
         fi
         status="$catchingUp"
-        now=$(date $timeformat)
+        now=$(date $timeFormat)
         blockHeightFromNow=$(($(date +%s -d "$now") - $(date +%s -d $blockTime)))
         variables="chainId=$chainId status=$status height=$height elapsed=$blockHeightFromNow peers=$peers${persistentPeersInfo} pctTotCommits=${pctTotCommits}${validatorMetrics}${govInfo}${versionInfo}"
     else
         status="error"
-        now=$(date $timeformat)
+        now=$(date $timeFormat)
         variables="status=$status"
     fi
 
