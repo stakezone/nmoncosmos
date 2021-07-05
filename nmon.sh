@@ -160,7 +160,7 @@ if [ $enableAPI == "true" ]; then
         addressIdentifier=$(grep -Po 'valoper\K[^ ^]{1,24}' <<<$valoper)
         nextKey=""
         while true; do
-            delegations=$(curl -s -X GET -H "Content-Type: application/json" -G --data-urlencode "pagination.key=${nextKey}" "${apiURL}/cosmos/staking/v1beta1/validators/${valoper}/delegations")
+            delegations=$(curl -s -X GET -H "Content-Type: application/json" -G --data-urlencode "pagination.key=${nextKey}" -G --data-urlencode "pagination.limit=5" "${apiURL}/cosmos/staking/v1beta1/validators/${valoper}/delegations")
             deladdress=$(jq -r '.delegation_responses[] | select(.delegation.delegator_address|test('\"$addressIdentifier\"')) | .delegation.delegator_address' <<<$delegations)
             if [ ! -z "$deladdress" ]; then
                 DELEGATORADDRESS="$deladdress"
@@ -261,7 +261,7 @@ while true; do
                 persistentPeersMatch=$(($persistentPeersMatch + $(grep -c "$id" <<<$netInfo)))
             done
             persistentPeersOff=$(($totPersistentPeerIds - $persistentPeersMatch))
-			pctPersistentPeersOff=$(echo "scale=2 ; 100 * $persistentPeersOff / $totPersistentPeerIds" | bc)
+	    pctPersistentPeersOff=$(echo "scale=2 ; 100 * $persistentPeersOff / $totPersistentPeerIds" | bc)
             persistentPeersInfo=" persistentPeersOff=$persistentPeersOff pctPersistentPeersOff=$pctPersistentPeersOff"
         else
             persistentPeersInfo=""
