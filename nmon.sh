@@ -93,6 +93,7 @@ if [ $enableAPI == "true" ]; then
     app=$(jq -r '.application_version.name' <<<$nodeInfo)
     appName=$(jq -r '.application_version.app_name' <<<$nodeInfo)
     version=$(jq -r '.application_version.version' <<<$nodeInfo)
+    version=$(sed 's/v//g' <<<$version)
     case $VERSIONING in
     revision)
         versionSpec="v"$(sed 's/\./\\./g' <<<$(grep -Po '^[0-9]*\.[0-9]*\.' <<<$version))".*$"
@@ -286,11 +287,10 @@ while true; do
                     precommitCount=$(($precommitCount + $validatorPrecommit))
                 done
                 pctPrecommits=$(echo "scale=2 ; 100 * $precommitCount / $PRECOMMITS_" | bc)
-
-                validatorInfo=" validatorAddress=$validatorAddress isValidator=$isValidator pctPrecommits=$pctPrecommits"
+                validatorInfo=" address=$validatorAddress isValidator=$isValidator pctPrecommits=$pctPrecommits"
             else
                 isValidator="false"
-                validatorInfo=" validatorAddress=$validatorAddress isValidator=$isValidator pctPrecommits="
+                validatorInfo=" address=$validatorAddress isValidator=$isValidator pctPrecommits="
             fi
             validator=$(curl -s -X GET -H "Content-Type: application/json" $apiURL/cosmos/staking/v1beta1/validators/${valoper})
             isJailed=$(jq -r '.validator.jailed' <<<$validator)
