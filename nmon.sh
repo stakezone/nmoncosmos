@@ -17,7 +17,7 @@ SLEEP1="30s"              # polls every SLEEP1 sec
 CHECKPERSISTENTPEERS="on" # if 'on' the number of disconnected persistent peers is checked
 ### api access required:  #
 VERSIONCHECK="on"         # checks the git remote repository for newer versions
-VERSIONING="patch"        # 'major.minor.patch-revision', 'patch' recommended for production, 'revision' for alpha, beta or rc (testnet)
+VERSIONING="minor patch"  # 'major.minor.patch-revision', any separated by blank, 'patch' recommended for production, 'revision' for alpha, beta or rc (testnet)
 REMOTEREPOSITORY=""       # remote repository is auto-discovered, however if eg. only the binary is deployed or it is not located under 'SHOME' it fails
 VALIDATORMETRICS="on"     # advanced validator metrics, api must be enabled in app.toml
 VALIDATORADDRESS=""       # if left empty default is from status call, any valid validator address can be monitored
@@ -94,20 +94,23 @@ if [ $enableAPI == "true" ]; then
     appName=$(jq -r '.application_version.app_name' <<<$nodeInfo)
     version=$(jq -r '.application_version.version' <<<$nodeInfo)
     version=$(sed 's/v//g' <<<$version)
-    case $VERSIONING in
-    revision)
-        versionSpec="v"$(sed 's/\./\\./g' <<<$(grep -Po '^[0-9]*\.[0-9]*\.' <<<$version))".*$"
-        ;;
-    patch)
-        versionSpec="v"$(sed 's/\./\\./g' <<<$(grep -Po '^[0-9]*\.[0-9]*\.' <<<$version))"[0-9]*$"
-        ;;
-    minor)
-        versionSpec="v"$(sed 's/\./\\./g' <<<$(grep -Po '^[0-9]*\.' <<<$version))"[0-9]*\.[0-9]*$"
-        ;;
-    major)
-        versionSpec="v[0-9]*\.[0-9]*\.[0-9]*$"
-        ;;
-    esac
+    for v in $VERSIONING; do
+        case $v in
+        revision)
+            versionSpec_="v"$(sed 's/\./\\./g' <<<$(grep -Po '^[0-9]*\.[0-9]*\.' <<<$version))".*$"
+            ;;
+        patch)
+            versionSpec_="v"$(sed 's/\./\\./g' <<<$(grep -Po '^[0-9]*\.[0-9]*\.' <<<$version))"[0-9]*$"
+            ;;
+        minor)
+            versionSpec_="v"$(sed 's/\./\\./g' <<<$(grep -Po '^[0-9]*\.' <<<$version))"[0-9]*\.[0-9]*$"
+            ;;
+        major)
+            versionSpec_="v[0-9]*\.[0-9]*\.[0-9]*$"
+            ;;
+        esac
+        versionSpec="$versionSpec $versionSpec_"
+    done
     gitCommit=$(jq -r '.application_version.git_commit' <<<$nodeInfo)
     goVersion=$(jq -r '.application_version.go_version' <<<$nodeInfo)
     goVersion=$(sed 's/go version //g' <<<$goVersion)
@@ -161,12 +164,10 @@ if [ $enableAPI == "true" ]; then
         addressIdentifier=$(grep -Po 'valoper\K[^ ^]{1,24}' <<<$valoper)
         nextKey=""
         while true; do
+		    if [ ! -z "$DELEGATORADDRESS" ]; then break; fi # not trying to find the delegator address first, can be commented out to change mode
             delegations=$(curl -s -X GET -H "Content-Type: application/json" -G --data-urlencode "pagination.key=${nextKey}" -G --data-urlencode "pagination.limit=5" "${apiURL}/cosmos/staking/v1beta1/validators/${valoper}/delegations")
             deladdress=$(jq -r '.delegation_responses[] | select(.delegation.delegator_address|test('\"$addressIdentifier\"')) | .delegation.delegator_address' <<<$delegations)
-            if [ ! -z "$deladdress" ]; then
-                DELEGATORADDRESS="$deladdress"
-                break
-            fi
+            if [ ! -z "$deladdress" ]; then DELEGATORADDRESS="$deladdress"; break; fi
             nextKey=$(jq -r '.pagination.next_key' <<<$delegations)
             if [ "$nextKey" == "null" ]; then
                 echo "delegator address not discovered, please set manually"
@@ -272,7 +273,7 @@ while true; do
         #activeValidators=$(jq -r '.result.round_state.validators.validators | length' <<<$consDump)
         pctTotCommits=$(jq -r '.result.round_state.last_commit.votes_bit_array' <<<$consDump)
         pctTotCommits=$(grep -Po "=\s+\K[^ ^]+" <<<$pctTotCommits)
-        pctTotCommits=$(echo "scale=2 ; 100 * $pctTotCommits" | bc)
+        if [ ! -z "$pctTotCommits" ]; then pctTotCommits=$(echo "scale=2 ; 100 * $pctTotCommits" | bc); fi
         if [ "$VALIDATORMETRICS" == "on" ]; then
             validatorAddress="${VALIDATORADDRESS:0:6}"
             isValidator=$(grep -c "$VALIDATORADDRESS" <<<$validators)
@@ -347,17 +348,21 @@ while true; do
             fi
         fi
         if [[ "$enableAPI" == "true" ]]; then
-            versions=$(echo $"$(git ls-remote --tags --refs --sort v:refname $REMOTEREPOSITORY)" | grep $versionSpec)
-            versions_=$(echo $"$versions" | grep $version -A 10)
-            versions=$(wc -l <<<$versions_)
-            if [ "$versions" -gt "1" ]; then
-                isLatestVersion="false"
-            elif [ "$versions" -eq "1" ]; then
-                isLatestVersion="true"
-            else
-                isLatestVersion=""
-            fi
-            versionInfo=" isLatestVersion=$isLatestVersion"
+            #versions=$(echo $"$(git ls-remote --tags --refs --sort v:refname $REMOTEREPOSITORY)" | grep $versionSpec)
+			versions=$(echo $"$(git ls-remote --tags --refs --sort v:refname $REMOTEREPOSITORY)")
+			for vs in $versionSpec; do
+			    versions=$(echo $"$versions" | grep $vs)
+                versions_=$(echo $"$versions" | grep $version -A 10)
+                versions=$(wc -l <<<$versions_)
+                if [ "$versions" -gt "1" ]; then
+                    isLatestVersion="false"; versionInfo=" isLatestVersion=$isLatestVersion"; break
+                elif [ "$versions" -eq "1" ]; then
+                    isLatestVersion="true"
+                else
+                    isLatestVersion=""
+                fi
+                versionInfo=" isLatestVersion=$isLatestVersion"
+			done
         fi
         status="$catchingUp"
         now=$(date $timeFormat)
