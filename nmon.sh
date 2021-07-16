@@ -17,14 +17,14 @@ SLEEP1="30s"              # polls every SLEEP1 sec
 CHECKPERSISTENTPEERS="on" # if 'on' the number of disconnected persistent peers is checked
 ### api access required:  #
 VERSIONCHECK="on"         # checks the git remote repository for newer versions
-VERSIONING="minor patch"  # 'major.minor.patch-revision', any separated by blank, 'patch' recommended for production, 'revision' for alpha, beta or rc (testnet)
+VERSIONING="minor patch"  # 'major.minor.patch-revision', any as list, 'patch' recommended for production, 'revision' for alpha, beta or rc (testnet)
 REMOTEREPOSITORY=""       # remote repository is auto-discovered, however if eg. only the binary is deployed or it is not located under 'SHOME' it fails
 VALIDATORMETRICS="on"     # advanced validator metrics, api must be enabled in app.toml
 VALIDATORADDRESS=""       # if left empty default is from status call, any valid validator address can be monitored
 PRECOMMITS="20"           # check last n precommits, can be 0 for no checking
 GOVERNANCE="on"           # vote checks, 'VALIDATORMETRICS' must be 'on'
 VOTEURGENCY="3.0"         # threshold in days for time left for that new proposals become urgent votes
-DELEGATORADDRESS=""       # the self-delegation address is auto-discovered, however it can fail in case no self-delegation exists
+DELEGATORADDRESS=""       # the self-delegation address is auto-discovered, however it can fail in case no self-delegation exists or takes very long time
 ###  internal:            #
 timeFormat="-u --rfc-3339=seconds" # date format for log line entries
 colorI='\033[0;32m'       # black 30, red 31, green 32, yellow 33, blue 34, magenta 35, cyan 36, white 37
