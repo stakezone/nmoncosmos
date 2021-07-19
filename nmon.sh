@@ -355,14 +355,14 @@ while true; do
                 versions__=$(echo $"$versions_" | grep $version -A 10)
                 versionsCount=$(wc -l <<<$versions__)
                 if [ "$versionsCount" -gt "1" ]; then
-                    isLatestVersion="false"; versionInfo=" isLatestVersion=$isLatestVersion"; break
+                    isLatestVersion="false"; break
                 elif [ "$versionsCount" -eq "1" ]; then
                     isLatestVersion="true"
                 else
                     isLatestVersion=""
                 fi
-                versionInfo=" isLatestVersion=$isLatestVersion"
 	    done
+	    versionInfo=" isLatestVersion=$isLatestVersion"
         fi
         status="$catchingUp"
         now=$(date $timeFormat)
