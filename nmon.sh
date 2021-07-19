@@ -350,19 +350,19 @@ while true; do
         if [[ "$enableAPI" == "true" ]]; then
             #versions=$(echo $"$(git ls-remote --tags --refs --sort v:refname $REMOTEREPOSITORY)" | grep $versionSpec)
 	    versions=$(echo $"$(git ls-remote --tags --refs --sort v:refname $REMOTEREPOSITORY)")
-	        for vs in $versionSpec; do
-	            versions_=$(echo $"$versions" | grep $vs)
-                    versions__=$(echo $"$versions_" | grep $version -A 10)
-                    versionsCount=$(wc -l <<<$versions__)
-                    if [ "$versionsCount" -gt "1" ]; then
-                        isLatestVersion="false"; versionInfo=" isLatestVersion=$isLatestVersion"; break
-                    elif [ "$versionsCount" -eq "1" ]; then
-                        isLatestVersion="true"
-                    else
-                        isLatestVersion=""
-                    fi
-                    versionInfo=" isLatestVersion=$isLatestVersion"
-		done
+	    for vs in $versionSpec; do
+	        versions_=$(echo $"$versions" | grep $vs)
+                versions__=$(echo $"$versions_" | grep $version -A 10)
+                versionsCount=$(wc -l <<<$versions__)
+                if [ "$versionsCount" -gt "1" ]; then
+                    isLatestVersion="false"; versionInfo=" isLatestVersion=$isLatestVersion"; break
+                elif [ "$versionsCount" -eq "1" ]; then
+                    isLatestVersion="true"
+                else
+                    isLatestVersion=""
+                fi
+                versionInfo=" isLatestVersion=$isLatestVersion"
+	    done
         fi
         status="$catchingUp"
         now=$(date $timeFormat)
