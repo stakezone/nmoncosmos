@@ -20,11 +20,11 @@ VERSIONCHECK="on"         # checks the git remote repository for newer versions
 VERSIONING="minor patch"  # 'major.minor.patch-revision', any as list, 'patch' recommended for production, 'revision' for alpha, beta or rc (testnet)
 REMOTEREPOSITORY=""       # remote repository is auto-discovered, however if eg. only the binary is deployed or it is not located under 'SHOME' it fails
 VALIDATORMETRICS="on"     # advanced validator metrics, api must be enabled in app.toml
-VALIDATORADDRESS=""       # if left empty default is from status call, any valid validator address can be monitored
+VALIDATORADDRESS=""       # if left empty default is auto-discovered, any valid validator address can be monitored
 PRECOMMITS="20"           # check last n precommits, can be 0 for no checking
 GOVERNANCE="on"           # vote checks, 'VALIDATORMETRICS' must be 'on'
 VOTEURGENCY="3.0"         # threshold in days for time left for that new proposals become urgent votes
-DELEGATORADDRESS=""       # the self-delegation address is auto-discovered, however it can fail in case no self-delegation exists or takes very long time
+DELEGATORADDRESS=""       # the self-delegation address is auto-discovered, however it can take very long or fails in case no self-delegation exists
 ###  internal:            #
 timeFormat="-u --rfc-3339=seconds" # date format for log line entries
 colorI='\033[0;32m'       # black 30, red 31, green 32, yellow 33, blue 34, magenta 35, cyan 36, white 37
@@ -349,20 +349,20 @@ while true; do
         fi
         if [[ "$enableAPI" == "true" ]]; then
             #versions=$(echo $"$(git ls-remote --tags --refs --sort v:refname $REMOTEREPOSITORY)" | grep $versionSpec)
-			versions=$(echo $"$(git ls-remote --tags --refs --sort v:refname $REMOTEREPOSITORY)")
-			for vs in $versionSpec; do
-			    versions=$(echo $"$versions" | grep $vs)
-                versions_=$(echo $"$versions" | grep $version -A 10)
-                versions=$(wc -l <<<$versions_)
-                if [ "$versions" -gt "1" ]; then
-                    isLatestVersion="false"; versionInfo=" isLatestVersion=$isLatestVersion"; break
-                elif [ "$versions" -eq "1" ]; then
-                    isLatestVersion="true"
-                else
-                    isLatestVersion=""
-                fi
-                versionInfo=" isLatestVersion=$isLatestVersion"
-			done
+	    versions=$(echo $"$(git ls-remote --tags --refs --sort v:refname $REMOTEREPOSITORY)")
+	        for vs in $versionSpec; do
+	            versions_=$(echo $"$versions" | grep $vs)
+                    versions__=$(echo $"$versions_" | grep $version -A 10)
+                    versionsCount=$(wc -l <<<$versions__)
+                    if [ "$versionsCount" -gt "1" ]; then
+                        isLatestVersion="false"; versionInfo=" isLatestVersion=$isLatestVersion"; break
+                    elif [ "$versionsCount" -eq "1" ]; then
+                        isLatestVersion="true"
+                    else
+                        isLatestVersion=""
+                    fi
+                    versionInfo=" isLatestVersion=$isLatestVersion"
+		done
         fi
         status="$catchingUp"
         now=$(date $timeFormat)
